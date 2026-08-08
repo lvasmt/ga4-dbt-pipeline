@@ -1,0 +1,25 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# dbt
+target/
+dbt_packages/
+logs/
+.user.yml
+
+# dbt profile (contains credentials - keep local only)
+profiles.yml
+
+# GCP service account keys
+*.json
+!package.json
+!package-lock.json
+
+# Environment variables
+.env
+
+# OS/editor
+.DS_Store
+.vscode/
