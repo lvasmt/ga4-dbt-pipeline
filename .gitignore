@@ -23,3 +23,7 @@ profiles.yml
 # OS/editor
 .DS_Store
 .vscode/
+
+# Personal working notes
+notes/
+CLAUDE.md
