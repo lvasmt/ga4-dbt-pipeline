@@ -52,5 +52,7 @@ with base as (
 
 select
     *,
+    coalesce(user_id, user_pseudo_id, concat('anonymous-', {{ business_key_expr(['stream_id', 'device_category', 'device_brand', 'device_model', 'session_source', 'session_medium', 'session_campaign_name']) }})) as session_identity_key, -- shared fallback for session grouping when both identifiers are null; includes device/source so two different anonymous visitors sharing a stream and ga_session_id still don't collide. Computed once here so int_sessions and fct_events don't each re-derive it.
     {{ business_key_expr(['event_identity_key', 'event_timestamp', 'event_name', 'device_category', 'country', 'city']) }} as event_business_key -- null-safe composite MERGE key; device/geo are extra tiebreakers on top of the identity fix, not a replacement for it
 from base
+qualify row_number() over (partition by event_business_key order by event_timestamp asc) = 1 -- GA4's export can genuinely deliver the same event more than once; MERGE only dedupes across separate runs, not within one load, so this collapses true duplicates within a single run

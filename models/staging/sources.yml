@@ -3,7 +3,7 @@ version: 2
 sources:
   - name: ga4_export 
     database: "{{ env_var('DBT_BQ_PROJECT')}}"
-    schema: {{ env_var('DBT_BQ_RAW_DATASET') }}
+    schema: "{{ env_var('DBT_BQ_RAW_DATASET') }}"
     tables: 
       - name: events_*
         identifier: events_*

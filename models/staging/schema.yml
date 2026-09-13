@@ -56,3 +56,9 @@ models:
 
       - name: manual_campaign_name
         description: "UTM campaign name from collected_traffic_source. Only populated for manually-tagged (UTM) traffic — null for organic/direct/referral."
+
+      - name: event_business_key
+        description: "Null-safe composite key used for incremental MERGE matching and to dedupe genuine duplicate event delivery from GA4's export within a single load."
+        tests:
+          - unique
+          - not_null

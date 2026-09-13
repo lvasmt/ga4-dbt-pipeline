@@ -84,3 +84,43 @@ models:
         tests:
           - unique
           - not_null
+
+  - name: int_sessions
+    description: "Session-grain aggregation of consented events. Grain: 1 row per session."
+    columns:
+      - name: session_code
+        description: "Business key for the session, unique per row by construction. A failure here means one of the columns assumed constant per session (and grouped by directly) isn't actually constant."
+        tests:
+          - unique
+          - not_null
+
+  - name: int_page_paths
+    description: "Distinct (page_path, page_title) combinations from consented events."
+    columns:
+      - name: page_path
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - page_path
+            - page_title
+
+  - name: int_ab_test_assignments
+    description: "Distinct (session_code, test_name, variant) assignments from the page_test event."
+    columns:
+      - name: session_code
+        tests:
+          - not_null
+      - name: test_name
+        tests:
+          - not_null
+      - name: variant
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - session_code
+            - test_name
+            - variant

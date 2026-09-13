@@ -5,19 +5,20 @@ with events as (
     select
         stg.user_pseudo_id,
         stg.user_id,
+        stg.event_identity_key,
         stg.event_date,
         stg.event_timestamp,
         stg.event_name,
         stg.event_value,
         split(stg.page_location, '?')[offset(0)] as page_path,
         stg.page_title,
-        coalesce(stg.user_id, stg.user_pseudo_id, concat('anonymous-', cast(stg.stream_id as string))) || '-' || cast(stg.ga_session_id as string) as session_code
+        stg.session_identity_key || '-' || cast(stg.ga_session_id as string) as session_code
     from {{ ref('int_consented_events') }} as stg
 
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['events.user_pseudo_id', 'events.event_timestamp', 'events.event_name']) }} as event_id,
+    {{ dbt_utils.generate_surrogate_key(['events.event_identity_key', 'events.event_timestamp', 'events.event_name']) }} as event_id,
     session_id_map.id as session_id,
     dim_date.date_id,
     dim_page.page_id,
