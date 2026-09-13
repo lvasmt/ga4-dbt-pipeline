@@ -1,0 +1,151 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: "Date dimension, static spine 2020-01-01 to 2035-12-31."
+    columns:
+      - name: date_id
+        description: "Primary key. YYYYMMDD string, matches GA4's event_date format."
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_page
+    description: "Page dimension, grain: (page_path, page_title)."
+    columns:
+      - name: page_id
+        description: "Primary key. Generated surrogate id from page_id_map."
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_traffic_source
+    description: "Traffic source dimension, grain: (source, medium, campaign)."
+    columns:
+      - name: traffic_source_id
+        description: "Primary key. Generated surrogate id from traffic_source_id_map."
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_geo
+    description: "Geo dimension, grain: (country, city)."
+    columns:
+      - name: geo_id
+        description: "Primary key. Generated surrogate id from geo_id_map."
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_device
+    description: "Device dimension, grain: (device_category, device_brand, device_model)."
+    columns:
+      - name: device_id
+        description: "Primary key. Generated surrogate id from device_id_map."
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_ab_test
+    description: "A/B test dimension, grain: (test_name, variant)."
+    columns:
+      - name: ab_test_id
+        description: "Primary key. Generated surrogate id from ab_test_id_map."
+        tests:
+          - unique
+          - not_null
+
+  - name: fct_sessions
+    description: "Session fact, grain: 1 row per session."
+    columns:
+      - name: session_id
+        description: "Primary key. Generated surrogate id from session_id_map."
+        tests:
+          - unique
+          - not_null
+      - name: date_id
+        description: "FK to dim_date."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_id
+      - name: traffic_source_id
+        description: "FK to dim_traffic_source."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_traffic_source')
+              field: traffic_source_id
+      - name: landing_page_id
+        description: "FK to dim_page."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_page')
+              field: page_id
+      - name: geo_id
+        description: "FK to dim_geo."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_geo')
+              field: geo_id
+      - name: device_id
+        description: "FK to dim_device."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_device')
+              field: device_id
+
+  - name: fct_events
+    description: "Event fact, grain: 1 row per event."
+    columns:
+      - name: event_id
+        description: "Primary key. Hashed surrogate key (dbt_utils.generate_surrogate_key), not the id-map mechanism."
+        tests:
+          - unique
+          - not_null
+      - name: date_id
+        description: "FK to dim_date."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_id
+      - name: session_id
+        description: "FK to fct_sessions."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('fct_sessions')
+              field: session_id
+      - name: page_id
+        description: "FK to dim_page."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_page')
+              field: page_id
+
+  - name: fct_ab_test_sessions
+    description: "A/B test session bridge, grain: (session_id, ab_test_id)."
+    columns:
+      - name: session_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('fct_sessions')
+              field: session_id
+      - name: ab_test_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_ab_test')
+              field: ab_test_id
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - session_id
+            - ab_test_id

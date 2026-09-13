@@ -20,9 +20,7 @@ models:
           - not_null
       
       - name: user_pseudo_id
-        description: "GA4's anonymous, device-scoped user identifier."
-        tests:
-          - not_null
+        description: "GA4's anonymous, device-scoped user identifier. Null when a user denies analytics_storage consent (Advanced Consent Mode) — GA4 omits identifiable data on those hits. Handled downstream in int_consented_events / the session_code fallback, not tested for null here."
 
       - name: stream_id
         description: "ID of the GA4 data stream (e.g. web stream) the event was collected from."

@@ -1,0 +1,86 @@
+version: 2
+
+models:
+  - name: traffic_source_id_map
+    description: "Persisted key-mapping table. Business key: (session_source, session_medium, session_campaign_name)."
+    columns:
+      - name: id
+        description: "Generated stable surrogate integer. Never reassigned once given."
+        tests:
+          - unique
+          - not_null
+      - name: business_key
+        description: "Null-safe concatenated business key, used to detect genuinely new keys on rerun."
+        tests:
+          - unique
+          - not_null
+
+  - name: page_id_map
+    description: "Persisted key-mapping table. Business key: (page_path, page_title)."
+    columns:
+      - name: id
+        description: "Generated stable surrogate integer. Never reassigned once given."
+        tests:
+          - unique
+          - not_null
+      - name: business_key
+        description: "Null-safe concatenated business key, used to detect genuinely new keys on rerun."
+        tests:
+          - unique
+          - not_null
+
+  - name: session_id_map
+    description: "Persisted key-mapping table. Business key: session_code."
+    columns:
+      - name: id
+        description: "Generated stable surrogate integer. Never reassigned once given."
+        tests:
+          - unique
+          - not_null
+      - name: business_key
+        description: "Null-safe concatenated business key, used to detect genuinely new keys on rerun."
+        tests:
+          - unique
+          - not_null
+
+  - name: geo_id_map
+    description: "Persisted key-mapping table. Business key: (country, city)."
+    columns:
+      - name: id
+        description: "Generated stable surrogate integer. Never reassigned once given."
+        tests:
+          - unique
+          - not_null
+      - name: business_key
+        description: "Null-safe concatenated business key, used to detect genuinely new keys on rerun."
+        tests:
+          - unique
+          - not_null
+
+  - name: device_id_map
+    description: "Persisted key-mapping table. Business key: (device_category, device_brand, device_model)."
+    columns:
+      - name: id
+        description: "Generated stable surrogate integer. Never reassigned once given."
+        tests:
+          - unique
+          - not_null
+      - name: business_key
+        description: "Null-safe concatenated business key, used to detect genuinely new keys on rerun."
+        tests:
+          - unique
+          - not_null
+
+  - name: ab_test_id_map
+    description: "Persisted key-mapping table. Business key: (test_name, variant)."
+    columns:
+      - name: id
+        description: "Generated stable surrogate integer. Never reassigned once given."
+        tests:
+          - unique
+          - not_null
+      - name: business_key
+        description: "Null-safe concatenated business key, used to detect genuinely new keys on rerun."
+        tests:
+          - unique
+          - not_null

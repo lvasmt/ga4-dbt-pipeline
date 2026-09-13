@@ -11,8 +11,8 @@ with events as (
         stg.event_value,
         split(stg.page_location, '?')[offset(0)] as page_path,
         stg.page_title,
-        coalesce(stg.user_id, stg.user_pseudo_id) || '-' || cast(stg.ga_session_id as string) as session_code
-    from {{ ref('stg_ga4_events') }} as stg
+        coalesce(stg.user_id, stg.user_pseudo_id, concat('anonymous-', cast(stg.stream_id as string))) || '-' || cast(stg.ga_session_id as string) as session_code
+    from {{ ref('int_consented_events') }} as stg
 
 )
 

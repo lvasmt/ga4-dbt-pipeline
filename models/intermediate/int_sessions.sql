@@ -3,9 +3,10 @@
 with aggregated as (
 
     select
-        coalesce(user_id, user_pseudo_id) || '-' || cast(ga_session_id as string) as session_code,
+        coalesce(user_id, user_pseudo_id, concat('anonymous-', cast(stream_id as string))) || '-' || cast(ga_session_id as string) as session_code, -- fallback for consent-denied hits where both identifiers are null; ga_session_id still varies per anonymous visit so this keeps them distinguishable instead of colliding
         user_pseudo_id,
         user_id,
+        stream_id,
         ga_session_number,
         session_source,
         session_medium,
@@ -22,10 +23,11 @@ with aggregated as (
         sum(engagement_time_msec) as total_engagement_time_msec,
         max(session_engaged) = 1 as is_engaged_session,
         min(event_timestamp) = min(user_first_touch_timestamp) as is_new_user -- device-level only; not accurate once user_id is configured across devices
-    from {{ ref('stg_ga4_events') }}
+    from {{ ref('int_consented_events') }}
     group by
         user_pseudo_id,
         user_id,
+        stream_id,
         ga_session_id,
         ga_session_number, -- constant per session (GA4-generated sequence number), safe to group by directly
         session_source, -- session_traffic_source_last_click is fixed at session start by GA4 itself -- safe to group by directly, not an aggregation pick

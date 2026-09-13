@@ -19,6 +19,8 @@ select
     device.mobile_brand_name as device_brand,
     device.mobile_model_name as device_model,
     device.mobile_marketing_name as device_marketing_name,
+    privacy_info.analytics_storage as consent_analytics_storage, -- 'Yes'/'No'/null (Advanced Consent Mode); null means no consent signal, not denial
+    privacy_info.ads_storage as consent_ads_storage,
     geo.country as country, 
     geo.city as city, 
     collected_traffic_source.manual_source as manual_source, 
