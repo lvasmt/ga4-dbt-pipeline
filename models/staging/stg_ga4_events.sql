@@ -1,5 +1,11 @@
-select 
-    event_date,
+{{ config(
+    materialized='incremental',
+    unique_key=['user_pseudo_id', 'event_timestamp', 'event_name'],
+    incremental_strategy='merge'
+) }}
+
+select
+    parse_date('%Y%m%d', event_date) as event_date, -- GA4 exports this as a STRING (YYYYMMDD); converted to a real DATE once, here, so nothing downstream has to format/match strings
     event_timestamp,
     event_name,
     user_pseudo_id,
@@ -29,9 +35,11 @@ select
     session_traffic_source_last_click.manual_campaign.source as session_source,
     session_traffic_source_last_click.manual_campaign.medium as session_medium,
     session_traffic_source_last_click.manual_campaign.campaign_name as session_campaign_name
-from 
+from
     {{source('ga4_export','events_*')}}
-WHERE 
-    _TABLE_SUFFIX >= '20260701'
-
-    
+{% if is_incremental() %}
+where _TABLE_SUFFIX >= (
+    select format_date('%Y%m%d', date_sub(max(event_date), interval 3 day))
+    from {{ this }}
+)
+{% endif %}

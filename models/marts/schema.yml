@@ -5,7 +5,7 @@ models:
     description: "Date dimension, static spine 2020-01-01 to 2035-12-31."
     columns:
       - name: date_id
-        description: "Primary key. YYYYMMDD string, matches GA4's event_date format."
+        description: "Primary key. Actual DATE type -- GA4's event_date is a STRING at the source, parsed to DATE once in stg_ga4_events."
         tests:
           - unique
           - not_null

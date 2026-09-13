@@ -6,8 +6,7 @@ with date_spine as (
 )
 
 select
-    format_date('%Y%m%d', date_day) as date_id,
-    date_day as calendar_date,
+    date_day as date_id, -- actual DATE, not a formatted string; collapsed from the earlier separate date_id (string) + calendar_date (date) pair
     mod(extract(dayofweek from date_day) + 5, 7) + 1 as day_of_week_number, -- Monday=1 ... Sunday=7, to match the Monday-based week_start_date below
     format_date('%A', date_day) as day_of_week_description,
     date_trunc(date_day, week(monday)) as week_start_date,
