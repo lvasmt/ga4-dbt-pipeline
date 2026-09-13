@@ -12,7 +12,13 @@ select
     {{get_ga4_repeated_field('event_params','page_title','string_value')}} as page_title,
     {{get_ga4_repeated_field('event_params','engagement_time_msec','int_value')}} as engagement_time_msec,
     {{get_ga4_repeated_field('event_params','session_engaged','int_value')}} as session_engaged,
+    {{get_ga4_repeated_field('event_params','value','double_value')}} as event_value, -- revenue/value param; not currently used on this site but kept for future events that carry it
+    {{get_ga4_repeated_field('event_params','test_name','string_value')}} as test_name, -- only present on 'page_test' events, null otherwise
+    {{get_ga4_repeated_field('event_params','page_variant_name','string_value')}} as page_variant_name, -- only present on 'page_test' events, null otherwise
     device.category as device_category,
+    device.mobile_brand_name as device_brand,
+    device.mobile_model_name as device_model,
+    device.mobile_marketing_name as device_marketing_name,
     geo.country as country, 
     geo.city as city, 
     collected_traffic_source.manual_source as manual_source, 

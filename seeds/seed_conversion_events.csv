@@ -1,0 +1,4 @@
+event_name,is_default_conversion,conversion_category
+purchase,true,
+generate_lead,true,
+sign_up,true,
