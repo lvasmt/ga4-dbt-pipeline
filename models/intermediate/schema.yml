@@ -1,9 +1,18 @@
 version: 2
 
 models:
+  - name: int_consented_events
+    description: "stg_ga4_events filtered to explicitly consented hits only (consent_analytics_storage = 'Yes'). Same columns as stg_ga4_events, unchanged — see models/staging/schema.yml for column documentation. Feeds all core reporting models; stg_ga4_events itself stays the full unfiltered layer for future recoverability."
+
   - name: traffic_source_id_map
     description: "Persisted key-mapping table. Business key: (session_source, session_medium, session_campaign_name)."
     columns:
+      - name: session_source
+        description: "Business key component — see stg_ga4_events.session_source."
+      - name: session_medium
+        description: "Business key component — see stg_ga4_events.session_medium."
+      - name: session_campaign_name
+        description: "Business key component — see stg_ga4_events.session_campaign_name."
       - name: id
         description: "Generated stable surrogate integer. Never reassigned once given."
         tests:
@@ -18,6 +27,10 @@ models:
   - name: page_id_map
     description: "Persisted key-mapping table. Business key: (page_path, page_title)."
     columns:
+      - name: page_path
+        description: "Business key component — cleaned page URL, query params stripped."
+      - name: page_title
+        description: "Business key component — page title as captured at the time."
       - name: id
         description: "Generated stable surrogate integer. Never reassigned once given."
         tests:
@@ -32,6 +45,8 @@ models:
   - name: session_id_map
     description: "Persisted key-mapping table. Business key: session_code."
     columns:
+      - name: session_code
+        description: "Business key component — see int_sessions.session_code."
       - name: id
         description: "Generated stable surrogate integer. Never reassigned once given."
         tests:
@@ -46,6 +61,10 @@ models:
   - name: geo_id_map
     description: "Persisted key-mapping table. Business key: (country, city)."
     columns:
+      - name: country
+        description: "Business key component — see stg_ga4_events.country."
+      - name: city
+        description: "Business key component — see stg_ga4_events.city."
       - name: id
         description: "Generated stable surrogate integer. Never reassigned once given."
         tests:
@@ -60,6 +79,12 @@ models:
   - name: device_id_map
     description: "Persisted key-mapping table. Business key: (device_category, device_brand, device_model)."
     columns:
+      - name: device_category
+        description: "Business key component — see stg_ga4_events.device_category."
+      - name: device_brand
+        description: "Business key component — see stg_ga4_events.device_brand."
+      - name: device_model
+        description: "Business key component — see stg_ga4_events.device_model."
       - name: id
         description: "Generated stable surrogate integer. Never reassigned once given."
         tests:
@@ -74,6 +99,10 @@ models:
   - name: ab_test_id_map
     description: "Persisted key-mapping table. Business key: (test_name, variant)."
     columns:
+      - name: test_name
+        description: "Business key component — name of the A/B test."
+      - name: variant
+        description: "Business key component — the test's variant (e.g. test vs control)."
       - name: id
         description: "Generated stable surrogate integer. Never reassigned once given."
         tests:
@@ -93,34 +122,80 @@ models:
         tests:
           - unique
           - not_null
+      - name: user_pseudo_id
+        description: "GA4's anonymous, device-scoped user identifier — see stg_ga4_events.user_pseudo_id. Degenerate dimension, kept for traceability."
+      - name: user_id
+        description: "GA4's User-ID — see stg_ga4_events.user_id. Degenerate dimension, kept for traceability."
+      - name: ga_session_number
+        description: "Sequential count of this session for the user (1 = first session). Constant per session, taken directly rather than aggregated."
+      - name: session_start_timestamp
+        description: "Timestamp of the earliest event in the session."
+      - name: session_date
+        description: "Date of the earliest event in the session. Feeds the FK to dim_date in fct_sessions."
+      - name: landing_page_path
+        description: "Cleaned page path (query params stripped) of the session's first event. Taken from the same row as landing_page_title via a struct, not independently, so the two can't be mismatched."
+      - name: landing_page_title
+        description: "Page title of the session's first event. See landing_page_path for how the pairing is guaranteed consistent."
+      - name: session_source
+        description: "Session-level traffic source — see stg_ga4_events.session_source. Confirmed fixed per session by GA4 itself, taken directly rather than aggregated."
+      - name: session_medium
+        description: "Session-level traffic medium — see stg_ga4_events.session_medium."
+      - name: session_campaign_name
+        description: "Session-level campaign name — see stg_ga4_events.session_campaign_name."
+      - name: device_category
+        description: "Device category of the session's first event. Taken from the same row as device_brand/device_model/device_marketing_name via a struct — device_category can change mid-session (e.g. browser dev tools device emulation) without a new GA4 session starting, so these are deliberately not independent per-column picks."
+      - name: device_brand
+        description: "Device brand of the session's first event. See device_category for why this comes from the same row as the other device fields."
+      - name: device_model
+        description: "Device model of the session's first event. See device_category for why this comes from the same row as the other device fields."
+      - name: device_marketing_name
+        description: "Device marketing name of the session's first event. See device_category for why this comes from the same row as the other device fields."
+      - name: country
+        description: "Country of the session's first event. Taken from the same row as city via a struct — geo is IP-derived per hit and could vary mid-session, same reasoning as the device fields."
+      - name: city
+        description: "City of the session's first event. See country for why this comes from the same row."
+      - name: total_engagement_time_msec
+        description: "Sum of engagement_time_msec across every event in the session."
+      - name: is_engaged_session
+        description: "True if GA4 flagged any event in the session as engaged."
+      - name: is_new_user
+        description: "True if the session's first event timestamp matches the device's recorded first-ever touch. Device-scoped, not person-scoped — not accurate once user_id is configured and the same person returns on a different device."
 
   - name: int_page_paths
     description: "Distinct (page_path, page_title) combinations from consented events."
     columns:
       - name: page_path
+        description: "Cleaned page URL, query params stripped."
         tests:
           - not_null
+      - name: page_title
+        description: "Page title as captured on the page_view/screen_view event."
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - page_path
-            - page_title
+          arguments:
+            combination_of_columns:
+              - page_path
+              - page_title
 
   - name: int_ab_test_assignments
     description: "Distinct (session_code, test_name, variant) assignments from the page_test event."
     columns:
       - name: session_code
+        description: "Business key for the session in which the A/B test assignment occurred — see int_sessions.session_code."
         tests:
           - not_null
       - name: test_name
+        description: "Name of the A/B test."
         tests:
           - not_null
       - name: variant
+        description: "The test's variant (e.g. test vs control)."
         tests:
           - not_null
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - session_code
-            - test_name
-            - variant
+          arguments:
+            combination_of_columns:
+              - session_code
+              - test_name
+              - variant

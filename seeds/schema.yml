@@ -1,0 +1,29 @@
+version: 2
+
+seeds:
+  - name: seed_conversion_events
+    description: "Default set of events treated as conversions on fct_events. A convenience default, not a restriction — BI can still filter/group by any event_name dynamically regardless."
+    columns:
+      - name: event_name
+        description: "GA4 event name to flag as a default conversion."
+        tests:
+          - not_null
+          - unique
+      - name: is_default_conversion
+        description: "Whether this event counts as a default conversion. Currently always true for every row in the seed."
+        tests:
+          - not_null
+      - name: conversion_category
+        description: "Optional grouping label for the conversion event. Currently unpopulated."
+
+  - name: seed_ab_test_conversion_events
+    description: "Per-test conversion event mapping — which event(s) count as a conversion for a given A/B test. Joined live in the BI tool against fct_ab_test_sessions / dim_ab_test / fct_events; no dbt model materialises this join."
+    columns:
+      - name: test_name
+        description: "Name of the A/B test, matching dim_ab_test.test_name."
+        tests:
+          - not_null
+      - name: event_name
+        description: "GA4 event name that counts as a conversion for this test. A test can have more than one qualifying event."
+        tests:
+          - not_null

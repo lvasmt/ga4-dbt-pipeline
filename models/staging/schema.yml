@@ -1,26 +1,37 @@
-version: 2 
+version: 2
 
 models:
   - name: stg_ga4_events
-    description: "Staged GA4 events from the raw BigQuery export, one row per event."
+    description: "Staged GA4 events from the raw BigQuery export, one row per event. Incremental, deduplicated against genuine duplicate event delivery within a single load."
     columns:
       - name: event_date
-        description: "Event date in YYYYMMDD string format, as exported by GA4."
+        description: "Event date, converted to a real DATE from GA4's native YYYYMMDD string format."
         tests:
           - not_null
 
       - name: event_timestamp
-        description: "Event Timestamp in microseconds since epoch."
+        description: "Event timestamp in microseconds since epoch."
         tests:
           - not_null
 
       - name: event_name
-        description: "Name of the GA4 events. Example: page_view, session_start, etc."
+        description: "Name of the GA4 event, e.g. page_view, session_start, purchase."
         tests:
           - not_null
-      
+
       - name: user_pseudo_id
         description: "GA4's anonymous, device-scoped user identifier. Null when a user denies analytics_storage consent (Advanced Consent Mode) — GA4 omits identifiable data on those hits. Handled downstream in int_consented_events / the session_code fallback, not tested for null here."
+
+      - name: event_identity_key
+        description: "Non-null stand-in for user_pseudo_id, used for incremental MERGE matching. Falls back to an anonymous, stream-scoped placeholder when user_pseudo_id is null (consent denied), since NULL never matches itself in a MERGE condition."
+        tests:
+          - not_null
+
+      - name: user_id
+        description: "GA4's User-ID. Only populated if this property has User-ID tracking configured; null otherwise."
+
+      - name: user_first_touch_timestamp
+        description: "Timestamp of this device's very first recorded touch (first_open/first_visit). Device-scoped, not person-scoped — used to derive is_new_user downstream."
 
       - name: stream_id
         description: "ID of the GA4 data stream (e.g. web stream) the event was collected from."
@@ -39,8 +50,38 @@ models:
       - name: page_title
         description: "Page title captured on the event, extracted from event_params. Only populated on page_view/screen_view-type events — expected to be null on others."
 
+      - name: engagement_time_msec
+        description: "Milliseconds of user engagement recorded on this event, extracted from event_params. Summed per session downstream to derive total engagement time."
+
+      - name: session_engaged
+        description: "1 if GA4 flagged this event's session as engaged, extracted from event_params. Used to derive is_engaged_session downstream."
+
+      - name: event_value
+        description: "Numeric value associated with the event (e.g. purchase revenue), extracted from event_params. Not currently populated on this site; kept for future events that carry it."
+
+      - name: test_name
+        description: "Name of the A/B test. Only populated on page_test events — null on all other event types."
+
+      - name: page_variant_name
+        description: "Variant of the A/B test (e.g. test vs control). Only populated on page_test events — null on all other event types."
+
       - name: device_category
         description: "Device category (e.g. desktop, mobile, tablet) from the device struct."
+
+      - name: device_brand
+        description: "Device manufacturer/brand (e.g. Apple, Samsung), from the device struct. Null for desktop traffic."
+
+      - name: device_model
+        description: "Technical device model code (e.g. SM-G991U), from the device struct. Null for desktop traffic."
+
+      - name: device_marketing_name
+        description: "Consumer-facing marketing name of the device (e.g. Galaxy S21), from the device struct. Sparser than device_model — also null for some mobile models not in Google's device lookup, in addition to desktop traffic."
+
+      - name: consent_analytics_storage
+        description: "Analytics storage consent status ('Yes'/'No'/null), from the privacy_info struct (Advanced Consent Mode). Null means no consent decision recorded yet, not denial. Drives the int_consented_events filter."
+
+      - name: consent_ads_storage
+        description: "Advertising storage consent status ('Yes'/'No'/null), from the privacy_info struct. Not currently used to filter reporting; captured alongside consent_analytics_storage for completeness."
 
       - name: country
         description: "User's country at time of event, from the geo struct. Can be null when GA4 can't resolve geo from the IP."
@@ -49,13 +90,25 @@ models:
         description: "User's city at time of event, from the geo struct. Can be null when GA4 can't resolve geo from the IP, or when resolved only to country/region level."
 
       - name: manual_source
-        description: "UTM source from collected_traffic_source. Only populated for manually-tagged (UTM) traffic — null for organic/direct/referral."
+        description: "UTM source from collected_traffic_source. Only populated for manually-tagged (UTM) traffic — null for organic/direct/referral. Raw/debug field, not used as the attribution dimension itself."
 
       - name: manual_medium
-        description: "UTM medium from collected_traffic_source. Only populated for manually-tagged (UTM) traffic — null for organic/direct/referral."
+        description: "UTM medium from collected_traffic_source. Only populated for manually-tagged (UTM) traffic — null for organic/direct/referral. Raw/debug field, not used as the attribution dimension itself."
 
       - name: manual_campaign_name
-        description: "UTM campaign name from collected_traffic_source. Only populated for manually-tagged (UTM) traffic — null for organic/direct/referral."
+        description: "UTM campaign name from collected_traffic_source. Only populated for manually-tagged (UTM) traffic — null for organic/direct/referral. Raw/debug field, not used as the attribution dimension itself."
+
+      - name: session_source
+        description: "Session-level traffic source, from GA4's own session_traffic_source_last_click attribution (last non-direct click across up to 90 days of prior sessions, not last event within this session). Fixed at session start by GA4 itself; feeds dim_traffic_source."
+
+      - name: session_medium
+        description: "Session-level traffic medium. Same attribution source and fixed-at-session-start behaviour as session_source."
+
+      - name: session_campaign_name
+        description: "Session-level campaign name. Same attribution source and fixed-at-session-start behaviour as session_source."
+
+      - name: session_identity_key
+        description: "Shared fallback identity used for session grouping when both user_id and user_pseudo_id are null (consent denied). Includes device and traffic source as tiebreakers so two different anonymous visitors sharing a ga_session_id don't collide. Computed once here; referenced by int_sessions and fct_events rather than each re-deriving it."
 
       - name: event_business_key
         description: "Null-safe composite key used for incremental MERGE matching and to dedupe genuine duplicate event delivery from GA4's export within a single load."

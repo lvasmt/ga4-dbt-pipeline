@@ -5,10 +5,24 @@ models:
     description: "Date dimension, static spine 2020-01-01 to 2035-12-31."
     columns:
       - name: date_id
-        description: "Primary key. Actual DATE type -- GA4's event_date is a STRING at the source, parsed to DATE once in stg_ga4_events."
+        description: "Primary key. Actual DATE type — GA4's event_date is a STRING at the source, parsed to DATE once in stg_ga4_events."
         tests:
           - unique
           - not_null
+      - name: day_of_week_number
+        description: "Day of week as an integer, Monday = 1 through Sunday = 7, matching the Monday-based week_start_date below."
+      - name: day_of_week_description
+        description: "Day of week as a full name, e.g. Monday."
+      - name: week_start_date
+        description: "Date of the Monday starting the week this date falls in."
+      - name: month
+        description: "Calendar month number (1-12)."
+      - name: quarter
+        description: "Calendar quarter number (1-4)."
+      - name: year
+        description: "Calendar year."
+      - name: is_weekend
+        description: "True for Saturday and Sunday."
 
   - name: dim_page
     description: "Page dimension, grain: (page_path, page_title)."
@@ -18,15 +32,27 @@ models:
         tests:
           - unique
           - not_null
+      - name: page_path
+        description: "Cleaned page URL, query params stripped."
+      - name: page_title
+        description: "Page title as captured on the page_view/screen_view event. Part of the grain rather than a plain descriptive attribute, since the same path can legitimately carry more than one title over time (e.g. CMS edits) — combining both into one dimension avoids either a non-deterministic pick or splitting into two separate dimensions."
 
   - name: dim_traffic_source
-    description: "Traffic source dimension, grain: (source, medium, campaign)."
+    description: "Traffic source dimension, grain: (source, medium, campaign). channel_grouping follows Google's documented default channel groups, manual-attribution rules only (this pipeline has no Google Ads/DV360/SA360 platform data) — a first-pass approximation using a curated subset of major sources, not Google's full reference list."
     columns:
       - name: traffic_source_id
         description: "Primary key. Generated surrogate id from traffic_source_id_map."
         tests:
           - unique
           - not_null
+      - name: source
+        description: "Session-level traffic source, from GA4's session_traffic_source_last_click attribution."
+      - name: medium
+        description: "Session-level traffic medium, same attribution source as source."
+      - name: campaign
+        description: "Session-level campaign name, same attribution source as source."
+      - name: channel_grouping
+        description: "Derived channel label (e.g. Organic Search, Paid Social, Direct, Referral, Email, Unassigned) computed from source/medium/campaign. See the model's own comments for the exact rule set and its known limitations."
 
   - name: dim_geo
     description: "Geo dimension, grain: (country, city)."
@@ -36,6 +62,10 @@ models:
         tests:
           - unique
           - not_null
+      - name: country
+        description: "User's country, resolved by GA4 from IP. Can be null when GA4 can't resolve geo."
+      - name: city
+        description: "User's city, resolved by GA4 from IP. Can be null when GA4 can't resolve geo, or resolves only to country/region level."
 
   - name: dim_device
     description: "Device dimension, grain: (device_category, device_brand, device_model)."
@@ -45,6 +75,14 @@ models:
         tests:
           - unique
           - not_null
+      - name: device_category
+        description: "Device category, e.g. desktop, mobile, tablet."
+      - name: device_brand
+        description: "Device manufacturer/brand, e.g. Apple, Samsung. Null for desktop."
+      - name: device_model
+        description: "Technical device model code. Null for desktop."
+      - name: device_marketing_name
+        description: "Consumer-facing marketing name of the device (e.g. Galaxy S21). Descriptive only, not part of the grain — assumed deterministic per (category, brand, model). Sparser than device_model."
 
   - name: dim_ab_test
     description: "A/B test dimension, grain: (test_name, variant)."
@@ -54,6 +92,10 @@ models:
         tests:
           - unique
           - not_null
+      - name: test_name
+        description: "Name of the A/B test, as sent in the page_test event."
+      - name: variant
+        description: "The test's variant (e.g. test vs control)."
 
   - name: fct_sessions
     description: "Session fact, grain: 1 row per session."
@@ -78,7 +120,7 @@ models:
               to: ref('dim_traffic_source')
               field: traffic_source_id
       - name: landing_page_id
-        description: "FK to dim_page."
+        description: "FK to dim_page, for the session's landing page."
         tests:
           - not_null
           - relationships:
@@ -98,12 +140,26 @@ models:
           - relationships:
               to: ref('dim_device')
               field: device_id
+      - name: user_pseudo_id
+        description: "GA4's anonymous, device-scoped user identifier. Degenerate dimension, kept for traceability."
+      - name: user_id
+        description: "GA4's User-ID, where configured. Degenerate dimension, kept for traceability."
+      - name: session_code
+        description: "Business key the session_id surrogate was generated from. Kept alongside the surrogate for traceability, same pattern as every dimension's business key."
+      - name: session_start_timestamp
+        description: "Timestamp of the session's first event."
+      - name: is_new_user
+        description: "True if this session's start matches the device's recorded first-ever touch. Device-scoped, not person-scoped."
+      - name: is_engaged_session
+        description: "True if GA4 flagged any event in the session as engaged."
+      - name: total_engagement_time_sec
+        description: "Total engagement time across the session, in seconds (converted from the underlying milliseconds)."
 
   - name: fct_events
     description: "Event fact, grain: 1 row per event."
     columns:
       - name: event_id
-        description: "Primary key. Hashed surrogate key (dbt_utils.generate_surrogate_key), not the id-map mechanism."
+        description: "Primary key. Hashed surrogate key (dbt_utils.generate_surrogate_key), not the id-map mechanism — events are high-volume/unbounded, unlike the dimension business keys the id-map mechanism is designed for."
         tests:
           - unique
           - not_null
@@ -115,30 +171,44 @@ models:
               to: ref('dim_date')
               field: date_id
       - name: session_id
-        description: "FK to fct_sessions."
+        description: "FK to fct_sessions — the session this event occurred in."
         tests:
           - not_null
           - relationships:
               to: ref('fct_sessions')
               field: session_id
       - name: page_id
-        description: "FK to dim_page."
+        description: "FK to dim_page, for this event's own page (not necessarily the session's landing page). Null for events that don't carry a page_location (non-page-scoped events)."
         tests:
           - not_null
           - relationships:
               to: ref('dim_page')
               field: page_id
+      - name: user_pseudo_id
+        description: "GA4's anonymous, device-scoped user identifier. Degenerate dimension, kept for traceability."
+      - name: user_id
+        description: "GA4's User-ID, where configured. Degenerate dimension, kept for traceability."
+      - name: event_name
+        description: "Name of the GA4 event, e.g. page_view, purchase, page_test."
+      - name: event_timestamp
+        description: "Timestamp the event occurred, in microseconds since epoch."
+      - name: event_value
+        description: "Numeric value associated with the event (e.g. purchase revenue). Not currently populated on this site."
+      - name: is_conversion
+        description: "True if event_name appears in seed_conversion_events with is_default_conversion set. A convenience default, not a restriction — BI can still filter/group by any event_name dynamically regardless of this flag."
 
   - name: fct_ab_test_sessions
-    description: "A/B test session bridge, grain: (session_id, ab_test_id)."
+    description: "A/B test session bridge, grain: (session_id, ab_test_id). No stored sessions or conversions columns — sessions is COUNT(session_id) at query time, and conversions are computed by joining fct_events + seed_ab_test_conversion_events, the same mechanism reused for both session-level and A/B-test-level conversion reporting so the two can't define \"conversion\" differently by accident."
     columns:
       - name: session_id
+        description: "FK to fct_sessions."
         tests:
           - not_null
           - relationships:
               to: ref('fct_sessions')
               field: session_id
       - name: ab_test_id
+        description: "FK to dim_ab_test."
         tests:
           - not_null
           - relationships:
@@ -146,6 +216,7 @@ models:
               field: ab_test_id
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - session_id
-            - ab_test_id
+          arguments:
+            combination_of_columns:
+              - session_id
+              - ab_test_id
