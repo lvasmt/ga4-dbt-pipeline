@@ -21,8 +21,9 @@ three separate but related stars, sharing a common set of dimensions.
 **Dimensions**
 - `dim_date`: date spine with calendar attributes
 - `dim_page`: page path and title
-- `dim_traffic_source`: source, medium, and campaign, with a derived channel
-  grouping
+- `dim_traffic_source`: source, medium, and campaign, with a combined
+  `source_medium` label (GA4's "google / organic" format) and a derived
+  channel grouping
 - `dim_geo`: country and city
 - `dim_device`: device category, brand, model, and marketing name
 - `dim_ab_test`: test name and variant
@@ -37,6 +38,21 @@ three separate but related stars, sharing a common set of dimensions.
 - `seed_conversion_events`: the default set of events treated as conversions
 - `seed_ab_test_conversion_events`: per-test conversion event mapping, joined
   at reporting time rather than materialised in dbt
+
+**Channel grouping**
+
+`channel_grouping` follows Google's documented default channel groups, using
+the source/medium-based rules only (there is no Google Ads platform data in
+the export). It deliberately departs from GA4's defaults in three places:
+
+- **AI Assistant** uses GA4's own rule (medium `ai-assistant`), plus a
+  fallback match on known AI sources (ChatGPT, Perplexity, Claude, Gemini,
+  Copilot and similar). The fallback catches sessions from before GA4
+  introduced the channel, and assistants not on Google's list.
+- Sessions with a `(not set)` or missing source and no real medium are
+  classed as **Direct** rather than GA4's Unassigned.
+- Search engines are matched on their own domain rather than as a substring,
+  so for example `tagmanager.google.com` is a Referral, not Organic Search.
 
 Surrogate keys are generated with a persisted, append-only key-mapping
 mechanism for dimensions and other slow-changing business keys, and with a
@@ -69,6 +85,10 @@ table would offer no benefit.
 ## Status
 
 The core star schema (sessions, events, A/B test assignment) is built and
-tested. Retention and customer journey modelling are planned but deferred, as
-they follow a different modelling pattern (cohort and path analysis rather
-than a conformed star).
+tested, and feeds a Power BI report covering traffic acquisition, landing
+pages, A/B tests, and users. Retention and customer journey modelling are
+planned but deferred, as they follow a different modelling pattern (cohort
+and path analysis rather than a conformed star).
+
+Planned next: a month label on `dim_date` (e.g. "Jan 2025", with an integer
+sort key), so monthly reporting axes don't have to be built in the BI layer.

@@ -51,8 +51,12 @@ models:
         description: "Session-level traffic medium, same attribution source as source."
       - name: campaign
         description: "Session-level campaign name, same attribution source as source."
+      - name: source_medium
+        description: "Combined 'source / medium' label in GA4's display format (e.g. 'google / organic'), nulls shown as '(not set)'. Convenience column for searching/filtering in BI tools."
+        tests:
+          - not_null
       - name: channel_grouping
-        description: "Derived channel label (e.g. Organic Search, Paid Social, Direct, Referral, Email, Unassigned) computed from source/medium/campaign. See the model's own comments for the exact rule set and its known limitations."
+        description: "Derived channel label (e.g. Organic Search, Paid Social, AI Assistant, Direct, Referral, Email, Unassigned) computed from source/medium/campaign. Deliberately departs from GA4 defaults in a few places (AI Assistant also matched on a fallback list of AI sources, (not set) treated as Direct, anchored search-engine matching). See the model's own comments for the exact rule set and its known limitations."
 
   - name: dim_geo
     description: "Geo dimension, grain: (country, city)."

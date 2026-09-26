@@ -7,6 +7,19 @@
 -- Search/social/video source matching below is a curated subset of the major
 -- sources, not Google's full 800+ site reference list -- expected to be
 -- refined later.
+--
+-- Deliberate departures from GA4's defaults:
+--   * (not set) / null source with no real medium is treated as Direct. GA4's
+--     own UI reports these as Unassigned.
+--   * AI Assistant: GA4's own rule is medium = 'ai-assistant' (GA4 sets that
+--     medium itself when the referrer is on its AI assistant list). A source
+--     match on known assistants is added as a fallback, for sessions from
+--     before GA4 introduced the channel and assistants not on Google's list.
+--     Checked right after Direct so e.g. gemini.google.com isn't caught by
+--     the search rules.
+--   * Search engine sources are matched on the domain itself (anchored regex),
+--     not as a substring, so e.g. tagmanager.google.com falls through to
+--     Referral instead of Organic Search.
 
 with sources as (
 
@@ -24,12 +37,23 @@ classified as (
         session_source as source,
         session_medium as medium,
         session_campaign_name as campaign,
+        concat(
+            coalesce(session_source, '(not set)'),
+            ' / ',
+            coalesce(session_medium, '(not set)')
+        ) as source_medium,
         case
-            when lower(session_source) = '(direct)'
-                and lower(session_medium) in ('(not set)', '(none)')
+            when (session_source is null or lower(session_source) in ('(direct)', '(not set)'))
+                and (session_medium is null or lower(session_medium) in ('(not set)', '(none)'))
                 then 'Direct'
+            when lower(session_medium) = 'ai-assistant'
+                or regexp_contains(
+                    lower(session_source),
+                    r'chatgpt|openai|perplexity|claude\.ai|anthropic|gemini\.google|bard\.google|copilot\.microsoft|deepseek|meta\.ai|grok|mistral\.ai|you\.com|poe\.com|phind'
+                )
+                then 'AI Assistant'
             when regexp_contains(lower(session_medium), r'.*cp.*|ppc|retargeting|paid.*')
-                and regexp_contains(lower(session_source), r'google|bing|yahoo|duckduckgo|baidu|yandex|ecosia|aol|ask')
+                and regexp_contains(lower(session_source), r'^((www|search|m)\.)?(google|bing|yahoo|duckduckgo|baidu|yandex|ecosia|aol|ask)(\.[a-z]{2,3}){0,2}$')
                 then 'Paid Search'
             when regexp_contains(lower(session_medium), r'.*cp.*|ppc|retargeting|paid.*')
                 and regexp_contains(lower(session_source), r'facebook|instagram|twitter|linkedin|pinterest|tiktok|reddit|snapchat|quora')
@@ -42,7 +66,7 @@ classified as (
             when regexp_contains(lower(session_medium), r'.*cp.*|ppc|retargeting|paid.*')
                 then 'Paid Other'
             when lower(session_medium) = 'organic'
-                or regexp_contains(lower(session_source), r'google|bing|yahoo|duckduckgo|baidu|yandex|ecosia|aol|ask')
+                or regexp_contains(lower(session_source), r'^((www|search|m)\.)?(google|bing|yahoo|duckduckgo|baidu|yandex|ecosia|aol|ask)(\.[a-z]{2,3}){0,2}$')
                 then 'Organic Search'
             when lower(session_medium) in ('social', 'social-network', 'social-media', 'sm')
                 or regexp_contains(lower(session_source), r'facebook|instagram|twitter|linkedin|pinterest|tiktok|reddit|snapchat|quora')
@@ -78,6 +102,7 @@ select
     classified.source,
     classified.medium,
     classified.campaign,
+    classified.source_medium,
     classified.channel_grouping
 from classified
 left join {{ ref('traffic_source_id_map') }} map
